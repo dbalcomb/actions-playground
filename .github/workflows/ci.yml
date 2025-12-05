@@ -50,3 +50,5 @@ jobs:
           images: ${{ github.repository_owner }}/actions-playground-example-one
           labels: |
             org.opencontainers.image.licenses=MIT OR Apache-2.0
+          annotations: |
+            manifest:org.opencontainers.image.licenses=MIT OR Apache-2.0
