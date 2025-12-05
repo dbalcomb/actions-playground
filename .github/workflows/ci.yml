@@ -75,7 +75,7 @@ jobs:
         id: image_meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ github.repository_owner }}/actions-playground-example-one
+          images: ghcr.io/${{ github.repository_owner }}/actions-playground-example-one
           labels: ${{ steps.package_meta.outputs.labels }}
 
       - name: Build and push by digest
@@ -84,7 +84,7 @@ jobs:
         with:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.image_meta.outputs.labels }}
-          tags: ${{ github.repository_owner }}/actions-playground-example-one
+          tags: ghcr.io/${{ github.repository_owner }}/actions-playground-example-one
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           context: .
           file: packages/example-one/Dockerfile
@@ -152,7 +152,7 @@ jobs:
         id: image_meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ github.repository_owner }}/actions-playground-example-one
+          images: ghcr.io/${{ github.repository_owner }}/actions-playground-example-one
           tags: |
             type=semver,pattern={{version}},value=${{ steps.package_meta.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.package_meta.outputs.version }}
@@ -166,8 +166,8 @@ jobs:
         working-directory: ${{ runner.temp }}/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ github.repository_owner }}/actions-playground-example-one@sha256:%s ' *)
+            $(printf 'ghcr.io/${{ github.repository_owner }}/actions-playground-example-one@sha256:%s ' *)
 
       - name: Inspect image
         run: |
-          docker buildx imagetools inspect ${{ github.repository_owner }}/actions-playground-example-one:${{ steps.image_meta.outputs.version }}
+          docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/actions-playground-example-one:${{ steps.image_meta.outputs.version }}
