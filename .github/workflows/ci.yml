@@ -48,3 +48,5 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ github.repository_owner }}/actions-playground-example-one
+          labels: |
+            org.opencontainers.image.licenses=MIT OR Apache-2.0
