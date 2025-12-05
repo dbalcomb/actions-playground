@@ -10,6 +10,9 @@ jobs:
   build:
     name: Build (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         include:
@@ -17,24 +20,29 @@ jobs:
             target: aarch64-unknown-linux-gnu
             toolchain: stable
             os: ubuntu-24.04-arm
+            platform: linux/arm64
 
           - label: linux, x86_64
             target: x86_64-unknown-linux-gnu
             toolchain: stable
             os: ubuntu-latest
+            platform: linux/amd64
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
-      - name: Setup
+      - name: Set up Rust
         uses: dtolnay/rust-toolchain@master
         with:
           targets: ${{ matrix.target }}
           toolchain: ${{ matrix.toolchain }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build
-        run: cargo build --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -69,7 +77,82 @@ jobs:
         with:
           images: ${{ github.repository_owner }}/actions-playground-example-one
           labels: ${{ steps.package_meta.outputs.labels }}
-          annotations: ${{ steps.package_meta.outputs.labels }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.image_meta.outputs.labels }}
+          tags: ${{ github.repository_owner }}/actions-playground-example-one
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          context: .
+          file: packages/example-one/Dockerfile
+          build-args: |
+            TARGET=${{ matrix.target }}
+
+      - name: Export digest
+        run: |
+          mkdir -p ${{ runner.temp }}/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Get Platform
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Get Package Metadata
+        id: package_meta
+        shell: bash
+        run: |
+          package_name="example-one"
+          package_meta=$(cargo metadata --no-deps --format-version 1 | jq -r ".packages[] | select(.name==\"$package_name\")")
+          package_vers=$(echo "$package_meta" | jq -r '.version')
+
+          echo "version=$package_vers" >> $GITHUB_OUTPUT
+
+      - name: Get Image Metadata
+        id: image_meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ github.repository_owner }}/actions-playground-example-one
           tags: |
             type=semver,pattern={{version}},value=${{ steps.package_meta.outputs.version }}
             type=semver,pattern={{major}}.{{minor}},value=${{ steps.package_meta.outputs.version }}
@@ -78,3 +161,13 @@ jobs:
             type=ref,event=pr
             type=sha
           flavor: latest=true
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ github.repository_owner }}/actions-playground-example-one@sha256:%s ' *)
+
+      - name: Inspect image
+        run: |
+          docker buildx imagetools inspect ${{ github.repository_owner }}/actions-playground-example-one:${{ steps.image_meta.outputs.version }}
