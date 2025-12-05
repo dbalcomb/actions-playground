@@ -42,3 +42,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get Image Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ github.repository_owner }}/actions-playground-example-one
