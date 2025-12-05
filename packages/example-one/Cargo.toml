@@ -1,5 +1,6 @@
 [package]
 name = "example-one"
+description = "The actions-playground example-one package"
 version = "0.0.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
