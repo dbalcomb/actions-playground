@@ -60,6 +60,7 @@ jobs:
             echo "org.opencontainers.image.licenses=$package_lice"
             echo "org.opencontainers.image.version=$package_vers"
             echo "EOF"
+            echo "version=$package_vers"
           } >> $GITHUB_OUTPUT
 
       - name: Get Image Metadata
@@ -69,3 +70,8 @@ jobs:
           images: ${{ github.repository_owner }}/actions-playground-example-one
           labels: ${{ steps.package_meta.outputs.labels }}
           annotations: ${{ steps.package_meta.outputs.labels }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}},value=${{ steps.package_meta.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.package_meta.outputs.version }}
+            type=semver,pattern={{major}},value=${{ steps.package_meta.outputs.version }}
